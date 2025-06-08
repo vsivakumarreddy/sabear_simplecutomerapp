@@ -2,7 +2,7 @@ pipeline {
     agent { label "master" }
 
     tools {
-        maven "Maven" // Ensure this matches your Maven tool name in Jenkins
+        maven "MVN_HOME" // Ensure this matches your Maven tool name in Jenkins
     }
 
     environment {
