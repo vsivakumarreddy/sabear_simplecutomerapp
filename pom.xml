@@ -1,20 +1,39 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+                             http://maven.apache.org/maven-v4_0_0.xsd">
+
    <modelVersion>4.0.0</modelVersion>
+
    <groupId>com.javatpoint</groupId>
    <artifactId>SimpleCustomerApp</artifactId>
+   <version>1.0.0-SNAPSHOT</version>
    <packaging>war</packaging>
-   <version>${BUILD_NUMBER}-SNAPSHOT</version>
    <name>SimpleCustomerApp</name>
    <url>http://maven.apache.org</url>
+
    <properties>
-       <maven.compiler.source>1.8</maven.compiler.source>
-       <maven.compiler.target>1.8</maven.compiler.target>
+       <!-- Set Java version to 17 -->
+       <maven.compiler.source>17</maven.compiler.source>
+       <maven.compiler.target>17</maven.compiler.target>
+       <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
    </properties>
+
    <build>
       <plugins>
+         <!-- Compiler plugin (optional, but good to specify) -->
+         <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-compiler-plugin</artifactId>
+            <version>3.10.1</version>
+            <configuration>
+               <source>${maven.compiler.source}</source>
+               <target>${maven.compiler.target}</target>
+            </configuration>
+         </plugin>
+
+         <!-- WAR plugin -->
          <plugin>
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-war-plugin</artifactId>
@@ -25,4 +44,5 @@
          </plugin>
       </plugins>
    </build>
+
 </project>
