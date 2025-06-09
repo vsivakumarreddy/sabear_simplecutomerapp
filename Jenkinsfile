@@ -15,7 +15,7 @@ pipeline {
         SONARQUBE_URL = "http://184.73.23.75:9000"
         SONARQUBE_CREDENTIAL_ID = "SONARQUBE-TOKEN"
 
-        TOMCAT_URL = "http://54.197.33.102:8080/manager/html"
+        TOMCAT_URL = "http://54.197.33.102:8080/manager/text"
         TOMCAT_CREDENTIAL_ID = "TOMCAT1"
 
         SLACK_CHANNEL = "#devops"
