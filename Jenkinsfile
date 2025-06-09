@@ -81,7 +81,7 @@ pipeline {
                     def warFile = "target/${pom.artifactId}-${pom.version}.${pom.packaging}"
                     deploy adapters: [
                         tomcat9(credentialsId: TOMCAT_CREDENTIAL_ID, path: '', url: TOMCAT_URL)
-                    ], contextPath: '/', war: warFile
+                    ], contextPath: '/sabear', war: warFile
                 }
             }
         }
