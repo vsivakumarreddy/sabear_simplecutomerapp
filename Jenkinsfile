@@ -37,7 +37,7 @@ pipeline {
                 // Using the Maven tool configured in Jenkins
                 sh 'mvn -Dmaven.test.failure.ignore=true clean install'
                 // -Dmaven.test.failure.ignore=true: Allows the build to proceed even if unit tests fail.
-                // Consider removing this flag for strict quality gates.
+                // Consider removing this flag for strict quality gates in production.
             }
         }
 
@@ -67,6 +67,7 @@ pipeline {
                     def warFileName = "${pom.artifactId}-${pom.version}.${pom.packaging}"
                     def artifactPath = "target/${warFileName}"
 
+                    // Verify the artifact exists before attempting to upload
                     if (!fileExists(artifactPath)) {
                         error "Artifact not found: ${artifactPath}. Check Maven build and packaging type."
                     }
@@ -106,7 +107,10 @@ pipeline {
                             url: TOMCAT_URL // URL to Tomcat Manager HTML interface
                         )
                     ],
-                    contextPath: '/sabear', // The application context path on Tomcat (e.g., http://<tomcat-ip>:8080/sabear)
+                    // *******************************************************************
+                    // CHANGED HERE: Dynamically set contextPath based on Maven artifactId
+                    // *******************************************************************
+                    contextPath: "/${pom.artifactId}", // The application context path on Tomcat (e.g., http://<tomcat-ip>:8080/SimpleCustomerApp)
                     war: warFile // The path to the WAR file to deploy
                 }
             }
@@ -122,8 +126,9 @@ pipeline {
             slackSend(channel: "${SLACK_CHANNEL}", message: "❌ *FAILURE*: Build & Deploy for `sabear_simplecutomerapp` on Jenkins. See build: ${env.BUILD_URL}", color: "#ff0000")
         }
         // Always execute this block, regardless of success/failure
-        // cleanup {
-        //     deleteDir() // Clean up workspace after build
+        // finally {
+        //     // Optional: Clean up workspace after build to save disk space
+        //     // deleteDir()
         // }
     }
 }
