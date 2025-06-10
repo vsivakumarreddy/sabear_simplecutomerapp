@@ -1,24 +1,28 @@
 pipeline {
-    agent { label "master" }
+    agent { label "master" } // Consider changing "master" to a dedicated agent label for production workloads
 
     tools {
-        maven "MVN_HOME" // Ensure this matches your Maven tool name in Jenkins
+        maven "MVN_HOME" // Ensure this matches your Maven tool name configured in Jenkins (Manage Jenkins -> Tools)
     }
 
     environment {
-        NEXUS_VERSION = "nexus3"
-        NEXUS_PROTOCOL = "http"
-        NEXUS_URL = "http://18.234.108.178:8081"
+        // Nexus Configuration
+        NEXUS_VERSION = "nexus3" // Or "nexus2" depending on your Nexus version
+        NEXUS_PROTOCOL = "http"  // Keep as http unless your Nexus is configured for https
+        NEXUS_URL = "18.234.108.178:8081" // CORRECTED: Removed the leading "http://" from here
         NEXUS_REPOSITORY = "sabear_pipeline_deploy"
-        NEXUS_CREDENTIAL_ID = "2408cef2-4f8b-4a72-957f-7f872d6af833"
+        NEXUS_CREDENTIAL_ID = "2408cef2-4f8b-4a72-957f-7f872d6af833" // Ensure this ID is correct and active in Jenkins Credentials
 
-        SONARQUBE_URL = "http://54.152.216.92:9000/"
-        SONARQUBE_CREDENTIAL_ID = "SONARQUBE-TOKEN"
+        // SonarQube Configuration
+        SONARQUBE_URL = "http://54.152.216.92:9000/" // Keep the full URL here
+        SONARQUBE_CREDENTIAL_ID = "SONARQUBE-TOKEN" // Ensure this ID is correct and active in Jenkins Credentials
 
-        TOMCAT_URL = "http://18.234.108.178:8080/manager/html"
-        TOMCAT_CREDENTIAL_ID = "TOMCAT1"
+        // Tomcat Deployment Configuration
+        TOMCAT_URL = "http://18.234.108.178:8080/manager/html" // URL to your Tomcat Manager App
+        TOMCAT_CREDENTIAL_ID = "TOMCAT1" // Ensure this ID (Username/Password) is correct for Tomcat Manager
 
-        SLACK_CHANNEL = "#devops"
+        // Slack Notifications
+        SLACK_CHANNEL = "#devops" // Your Slack channel name
     }
 
     stages {
@@ -30,13 +34,16 @@ pipeline {
 
         stage('Build with Maven') {
             steps {
+                // Using the Maven tool configured in Jenkins
                 sh 'mvn -Dmaven.test.failure.ignore=true clean install'
+                // -Dmaven.test.failure.ignore=true: Allows the build to proceed even if unit tests fail.
+                // Consider removing this flag for strict quality gates.
             }
         }
 
         stage('Run SonarQube Scan') {
             steps {
-                withSonarQubeEnv('sonarqube') {
+                withSonarQubeEnv('sonarqube') { // 'sonarqube' should match the name of your SonarQube server configured in Jenkins
                     withCredentials([string(credentialsId: "${SONARQUBE_CREDENTIAL_ID}", variable: 'SONAR_TOKEN')]) {
                         sh """
                             mvn sonar:sonar \
@@ -52,21 +59,31 @@ pipeline {
         stage('Publish to Nexus') {
             steps {
                 script {
-                    def pom = readMavenPom file: 'pom.xml'
-                    def artifactPath = findFiles(glob: "target/*.${pom.packaging}")[0].path
+                    // Read Maven POM details
+                    def pom = readMavenPom file: 'pom.xml' // Ensure pom.xml is at the root of the workspace
+                    
+                    // Construct the full path to the WAR file
+                    // Assuming the WAR artifact is in target/ and follows Maven's default naming convention
+                    def warFileName = "${pom.artifactId}-${pom.version}.${pom.packaging}"
+                    def artifactPath = "target/${warFileName}"
+
                     if (!fileExists(artifactPath)) {
-                        error "Artifact not found: ${artifactPath}"
+                        error "Artifact not found: ${artifactPath}. Check Maven build and packaging type."
                     }
+
+                    // Upload artifacts to Nexus
                     nexusArtifactUploader(
                         nexusVersion: NEXUS_VERSION,
                         protocol: NEXUS_PROTOCOL,
-                        nexusUrl: NEXUS_URL,
+                        nexusUrl: NEXUS_URL, // This will now correctly combine with NEXUS_PROTOCOL in the plugin
                         repository: NEXUS_REPOSITORY,
                         credentialsId: NEXUS_CREDENTIAL_ID,
                         groupId: pom.groupId,
                         version: pom.version,
                         artifacts: [
+                            // Main artifact (WAR file)
                             [artifactId: pom.artifactId, classifier: '', file: artifactPath, type: pom.packaging],
+                            // POM file for metadata
                             [artifactId: pom.artifactId, classifier: '', file: 'pom.xml', type: 'pom']
                         ]
                     )
@@ -78,21 +95,35 @@ pipeline {
             steps {
                 script {
                     def pom = readMavenPom file: 'pom.xml'
+                    // Construct the full path to the WAR file for deployment
                     def warFile = "target/${pom.artifactId}-${pom.version}.${pom.packaging}"
+
+                    // Deploy using the Tomcat plugin
                     deploy adapters: [
-                        tomcat9(credentialsId: TOMCAT_CREDENTIAL_ID, path: '', url: TOMCAT_URL)
-                    ], contextPath: '/sabear', war: warFile
+                        tomcat9(
+                            credentialsId: TOMCAT_CREDENTIAL_ID,
+                            path: '', // Optional: Tomcat manager path (usually empty for default)
+                            url: TOMCAT_URL // URL to Tomcat Manager HTML interface
+                        )
+                    ],
+                    contextPath: '/sabear', // The application context path on Tomcat (e.g., http://<tomcat-ip>:8080/sabear)
+                    war: warFile // The path to the WAR file to deploy
                 }
             }
         }
     }
 
+    // Post-build actions (notifications)
     post {
         success {
-            slackSend(channel: "${SLACK_CHANNEL}", message: "✅ Build & Deploy Successful for sabear_simplecutomerapp on Jenkins [jenkins-2nr9163]", color: "#36a64f")
+            slackSend(channel: "${SLACK_CHANNEL}", message: "✅ *SUCCESS*: Build & Deploy for `sabear_simplecutomerapp` on Jenkins. See build: ${env.BUILD_URL}", color: "#36a64f")
         }
         failure {
-            slackSend(channel: "${SLACK_CHANNEL}", message: "❌ Build Failed for sabear_simplecutomerapp on Jenkins [jenkins-2nr9163]", color: "#ff0000")
+            slackSend(channel: "${SLACK_CHANNEL}", message: "❌ *FAILURE*: Build & Deploy for `sabear_simplecutomerapp` on Jenkins. See build: ${env.BUILD_URL}", color: "#ff0000")
         }
+        // Always execute this block, regardless of success/failure
+        // cleanup {
+        //     deleteDir() // Clean up workspace after build
+        // }
     }
 }
