@@ -9,7 +9,7 @@ pipeline {
         NEXUS_VERSION = "nexus3"
         NEXUS_PROTOCOL = "http"
         NEXUS_URL = "http://18.234.108.178:8081/"
-        NEXUS_REPOSITORY = "sabear_pipeline"
+        NEXUS_REPOSITORY = "sabear_pipeline_deploy"
         NEXUS_CREDENTIAL_ID = "2408cef2-4f8b-4a72-957f-7f872d6af833"
 
         SONARQUBE_URL = "http://54.152.216.92:9000/"
