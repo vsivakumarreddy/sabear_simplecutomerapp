@@ -2,13 +2,43 @@ pipeline {
     agent { label "master" }
 
     tools {
-        maven "MVN_HOME"
+        maven "${params.MAVEN_TOOL}" // Pass tool name like "MVN_HOME" as parameter
+    }
+
+    environment {
+        // Credentials (Hardcoded)
+        NEXUS_CREDENTIAL_ID = "2408cef2-4f8b-4a72-957f-7f872d6af833"
+        SONARQUBE_CREDENTIAL_ID = "SONARQUBE-TOKEN"
+        TOMCAT_CREDENTIAL_ID = "TOMCAT1"
+
+        // Parameters (Set these in Jenkins job configuration)
+        NEXUS_VERSION    = "${params.NEXUS_VERSION}"
+        NEXUS_PROTOCOL   = "${params.NEXUS_PROTOCOL}"
+        NEXUS_URL        = "${params.NEXUS_URL}"
+        NEXUS_REPOSITORY = "${params.NEXUS_REPOSITORY}"
+
+        SONARQUBE_URL    = "${params.SONARQUBE_URL}"
+
+        TOMCAT_URL       = "${params.TOMCAT_URL}"
+
+        SLACK_CHANNEL    = "${params.SLACK_CHANNEL}"
+    }
+
+    parameters {
+        string(name: 'MAVEN_TOOL', defaultValue: 'MVN_HOME', description: 'Maven tool name from Jenkins configuration')
+        string(name: 'NEXUS_URL', defaultValue: '54.227.22.45:8081', description: 'Nexus URL')
+        choice(name: 'NEXUS_VERSION', choices: ['nexus2', 'nexus3'], description: 'Nexus version')
+        choice(name: 'NEXUS_PROTOCOL', choices: ['http', 'https'], description: 'Nexus protocol')
+        string(name: 'NEXUS_REPOSITORY', defaultValue: 'sabear_pipeline_deploy', description: 'Nexus repository name')
+        string(name: 'SONARQUBE_URL', defaultValue: 'http://52.23.206.60:9000/', description: 'SonarQube server URL')
+        string(name: 'TOMCAT_URL', defaultValue: 'http://54.227.22.45:8080/manager/html', description: 'Tomcat Manager URL')
+        string(name: 'SLACK_CHANNEL', defaultValue: '#devops', description: 'Slack channel')
     }
 
     stages {
         stage('Clone Code') {
             steps {
-                git branch: "${params.GIT_BRANCH}", url: 'https://github.com/vsivakumarreddy/sabear_simplecutomerapp.git'
+                git branch: 'master', url: 'https://github.com/vsivakumarreddy/sabear_simplecutomerapp.git'
             }
         }
 
@@ -21,11 +51,11 @@ pipeline {
         stage('Run SonarQube Scan') {
             steps {
                 withSonarQubeEnv('sonarqube') {
-                    withCredentials([string(credentialsId: "${params.SONARQUBE_CREDENTIAL_ID}", variable: 'SONAR_TOKEN')]) {
+                    withCredentials([string(credentialsId: "${SONARQUBE_CREDENTIAL_ID}", variable: 'SONAR_TOKEN')]) {
                         sh """
                             mvn sonar:sonar \
                                 -Dsonar.projectKey=sabear_simplecutomerapp \
-                                -Dsonar.host.url=${params.SONARQUBE_URL} \
+                                -Dsonar.host.url=$SONARQUBE_URL \
                                 -Dsonar.login=$SONAR_TOKEN
                         """
                     }
@@ -41,15 +71,15 @@ pipeline {
                     def artifactPath = "target/${warFileName}"
 
                     if (!fileExists(artifactPath)) {
-                        error "Artifact not found: ${artifactPath}. Check Maven build and packaging type."
+                        error "Artifact not found: ${artifactPath}"
                     }
 
                     nexusArtifactUploader(
-                        nexusVersion: "${params.NEXUS_VERSION}",
-                        protocol: "${params.NEXUS_PROTOCOL}",
-                        nexusUrl: "${params.NEXUS_URL}",
-                        repository: "${params.NEXUS_REPOSITORY}",
-                        credentialsId: "${params.NEXUS_CREDENTIAL_ID}",
+                        nexusVersion: NEXUS_VERSION,
+                        protocol: NEXUS_PROTOCOL,
+                        nexusUrl: NEXUS_URL,
+                        repository: NEXUS_REPOSITORY,
+                        credentialsId: NEXUS_CREDENTIAL_ID,
                         groupId: pom.groupId,
                         version: pom.version,
                         artifacts: [
@@ -69,9 +99,9 @@ pipeline {
 
                     deploy adapters: [
                         tomcat9(
-                            credentialsId: "${params.TOMCAT_CREDENTIAL_ID}",
+                            credentialsId: TOMCAT_CREDENTIAL_ID,
                             path: '',
-                            url: "${params.TOMCAT_URL}"
+                            url: TOMCAT_URL
                         )
                     ],
                     contextPath: "/${pom.artifactId}",
@@ -83,10 +113,10 @@ pipeline {
 
     post {
         success {
-            slackSend(channel: "${params.SLACK_CHANNEL}", message: "✅ *SUCCESS*: Build & Deploy for `sabear_simplecutomerapp`. See build: ${env.BUILD_URL}", color: "#36a64f")
+            slackSend(channel: "${SLACK_CHANNEL}", message: "✅ *SUCCESS*: Build & Deploy for `sabear_simplecutomerapp` on Jenkins. See build: ${env.BUILD_URL}", color: "#36a64f")
         }
         failure {
-            slackSend(channel: "${params.SLACK_CHANNEL}", message: "❌ *FAILURE*: Build & Deploy for `sabear_simplecutomerapp`. See build: ${env.BUILD_URL}", color: "#ff0000")
+            slackSend(channel: "${SLACK_CHANNEL}", message: "❌ *FAILURE*: Build & Deploy for `sabear_simplecutomerapp` on Jenkins. See build: ${env.BUILD_URL}", color: "#ff0000")
         }
     }
 }
