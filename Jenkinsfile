@@ -2,23 +2,27 @@ pipeline {
     agent any
 
     tools {
-        maven 'MVN_HOME'
+        maven "MVN_HOME"
     }
 
     environment {
-        // Credentials configured in Jenkins
-        NEXUS_CREDENTIAL_ID     = "2408cef2-4f8b-4a72-957f-7f872d6af833"
-        SONARQUBE_CREDENTIAL_ID = "SONARQUBE-TOKEN"
-        TOMCAT_CREDENTIAL_ID    = "TOMCAT1"
-
-        // Other configurations
-        NEXUS_VERSION    = "nexus3"
-        NEXUS_PROTOCOL   = "http"
-        NEXUS_URL        = "54.227.22.45:8081"
+        // Nexus Configuration
+        NEXUS_VERSION = "nexus3"
+        NEXUS_PROTOCOL = "http"
+        NEXUS_URL = "54.227.83.9:8081"
         NEXUS_REPOSITORY = "sabear_pipeline_deploy"
-        SONARQUBE_URL    = "http://52.23.206.60:9000/"
-        TOMCAT_URL       = "http://54.227.22.45:8080/manager/html"
-        SLACK_CHANNEL    = "#devops"
+        NEXUS_CREDENTIAL_ID = "2408cef2-4f8b-4a72-957f-7f872d6af833"
+
+        // SonarQube Configuration
+        SONARQUBE_URL = "http://3.88.47.108:9000/"
+        SONARQUBE_CREDENTIAL_ID = "SONARQUBE-TOKEN"
+
+        // Tomcat Deployment Configuration
+        TOMCAT_URL = "http://54.227.83.9:8080/manager/html"
+        TOMCAT_CREDENTIAL_ID = "TOMCAT1"
+
+        // Slack Notifications
+        SLACK_CHANNEL = "#devops"
     }
 
     stages {
@@ -29,14 +33,12 @@ pipeline {
         }
 
         stage('Build with Maven') {
-            when { expression { return params.RUN_MAVEN_BUILD } }
             steps {
                 sh 'mvn -Dmaven.test.failure.ignore=true clean install'
             }
         }
 
-        stage('SonarQube Analysis') {
-            when { expression { return params.RUN_SONAR_ANALYSIS } }
+        stage('Run SonarQube Scan') {
             steps {
                 withSonarQubeEnv('sonarqube') {
                     withCredentials([string(credentialsId: "${SONARQUBE_CREDENTIAL_ID}", variable: 'SONAR_TOKEN')]) {
@@ -51,14 +53,15 @@ pipeline {
             }
         }
 
-        stage('Deploy to Nexus') {
-            when { expression { return params.DEPLOY_TO_NEXUS } }
+        stage('Publish to Nexus') {
             steps {
                 script {
                     def pom = readMavenPom file: 'pom.xml'
-                    def warFile = "target/${pom.artifactId}-${pom.version}.${pom.packaging}"
-                    if (!fileExists(warFile)) {
-                        error "WAR file not found: ${warFile}"
+                    def warFileName = "${pom.artifactId}-${pom.version}.${pom.packaging}"
+                    def artifactPath = "target/${warFileName}"
+
+                    if (!fileExists(artifactPath)) {
+                        error "Artifact not found: ${artifactPath}"
                     }
 
                     nexusArtifactUploader(
@@ -70,7 +73,7 @@ pipeline {
                         groupId: pom.groupId,
                         version: pom.version,
                         artifacts: [
-                            [artifactId: pom.artifactId, classifier: '', file: warFile, type: pom.packaging],
+                            [artifactId: pom.artifactId, classifier: '', file: artifactPath, type: pom.packaging],
                             [artifactId: pom.artifactId, classifier: '', file: 'pom.xml', type: 'pom']
                         ]
                     )
@@ -79,7 +82,6 @@ pipeline {
         }
 
         stage('Deploy to Tomcat') {
-            when { expression { return params.DEPLOY_TO_TOMCAT } }
             steps {
                 script {
                     def pom = readMavenPom file: 'pom.xml'
@@ -92,7 +94,7 @@ pipeline {
                             url: TOMCAT_URL
                         )
                     ],
-                    contextPath: "/${pom.artifactId}",
+                    contextPath: "/shiva-app", // Deploy as "shiva-app"
                     war: warFile
                 }
             }
@@ -101,10 +103,10 @@ pipeline {
 
     post {
         success {
-            slackSend(channel: SLACK_CHANNEL, message: "✅ *SUCCESS*: Build & Deploy for `sabear_simplecutomerapp` - ${env.BUILD_URL}", color: "#36a64f")
+            slackSend(channel: "${SLACK_CHANNEL}", message: "✅ *SUCCESS*: `sabear_simplecutomerapp` deployed as `/shiva-app`. [View Build](${env.BUILD_URL})", color: "#36a64f")
         }
         failure {
-            slackSend(channel: SLACK_CHANNEL, message: "❌ *FAILURE*: Build & Deploy for `sabear_simplecutomerapp` - ${env.BUILD_URL}", color: "#ff0000")
+            slackSend(channel: "${SLACK_CHANNEL}", message: "❌ *FAILURE*: `sabear_simplecutomerapp` failed to deploy as `/shiva-app`. [View Build](${env.BUILD_URL})", color: "#ff0000")
         }
     }
 }
